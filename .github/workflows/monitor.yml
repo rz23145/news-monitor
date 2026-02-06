@@ -1,0 +1,24 @@
+name: News Monitor
+
+on:
+  schedule:
+    - cron: "*/15 * * * *"
+  workflow_dispatch: {}
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run monitor
+        run: python -m monitor.cli run --config config.example.json --db news.db
+      - name: Upload database artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: news-db
+          path: news.db

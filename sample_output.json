@@ -1,0 +1,28 @@
+[
+  {
+    "title": "Apple shares rise after earnings beat",
+    "source": "Reuters",
+    "published_at": "2026-02-06T13:45:00Z",
+    "published_at_inferred": false,
+    "url": "https://www.reuters.com/technology/apple-earnings-2026-02-06/",
+    "summary": "Apple reported quarterly results that exceeded analyst expectations.",
+    "ticker": "AAPL",
+    "origin_source": "google_news_rss",
+    "guid": null,
+    "first_seen_at": "2026-02-06T14:00:05Z",
+    "dedup_key": "8a4b3e3d5b0a3f1b9a0e7c2c0f5d25f4f56b4f9c1a5fbe0f3f1d0cbb0e0f3a21"
+  },
+  {
+    "title": "Tesla unveils new battery roadmap",
+    "source": "Yahoo Finance",
+    "published_at": "2026-02-06T12:10:00Z",
+    "published_at_inferred": false,
+    "url": "https://finance.yahoo.com/news/tesla-battery-roadmap-121000.html",
+    "summary": "Tesla outlined a multi-year battery strategy focused on cost and energy density.",
+    "ticker": "TSLA",
+    "origin_source": "yahoo_rss",
+    "guid": "tesla-battery-roadmap-121000",
+    "first_seen_at": "2026-02-06T12:15:02Z",
+    "dedup_key": "0c5f9b6a6f9e0a7e4a7b1c3c3e2f1f5d6a9d8f2c3b4a5e6f7d8c9b0a1b2c3d4e"
+  }
+]

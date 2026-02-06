@@ -1,0 +1,13 @@
+version: "3.8"
+
+services:
+  news-monitor:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+    volumes:
+      - ./data:/data
+      - ../config.json:/app/config.json:ro
+    environment:
+      - NEWS_DB_PATH=/data/news.db
+    command: ["run", "--config", "/app/config.json", "--db", "/data/news.db", "--loop"]

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0">
+  <channel>
+    <title>Yahoo Finance - AAPL</title>
+    <item>
+      <title>Apple earnings beat expectations</title>
+      <link>https://finance.yahoo.com/news/apple-earnings-123000.html</link>
+      <guid isPermaLink="false">apple-earnings-123000</guid>
+      <pubDate>Fri, 06 Feb 2026 12:30:00 GMT</pubDate>
+      <description>Apple reported strong quarterly results.</description>
+    </item>
+  </channel>
+</rss>

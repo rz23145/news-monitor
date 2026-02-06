@@ -1,0 +1,17 @@
+README.md
+pyproject.toml
+src/monitor/__init__.py
+src/monitor/cli.py
+src/monitor/config.py
+src/monitor/http.py
+src/monitor/models.py
+src/monitor/runner.py
+src/monitor/sources.py
+src/monitor/storage.py
+src/news_monitor.egg-info/PKG-INFO
+src/news_monitor.egg-info/SOURCES.txt
+src/news_monitor.egg-info/dependency_links.txt
+src/news_monitor.egg-info/requires.txt
+src/news_monitor.egg-info/top_level.txt
+tests/test_dedup.py
+tests/test_parse_rss.py

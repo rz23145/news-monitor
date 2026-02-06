@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<rss version="2.0">
+  <channel>
+    <title>Google News</title>
+    <item>
+      <title>Tesla shares rise after delivery report</title>
+      <link>https://news.google.com/rss/articles/CBMiXmh0dHBzOi8vZXhhbXBsZS5jb20vdGVzbGEtc2hhcmVzLXJpc2U?hl=en-US&amp;gl=US&amp;ceid=US:en&amp;url=https%3A%2F%2Fexample.com%2Ftesla-shares-rise</link>
+      <pubDate>Fri, 06 Feb 2026 10:00:00 GMT</pubDate>
+      <source url="https://example.com">Example News</source>
+      <description>Tesla reported deliveries above estimates.</description>
+    </item>
+  </channel>
+</rss>
