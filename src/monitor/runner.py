@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import os
 import time
 from collections import Counter
 from datetime import datetime, timezone
@@ -42,6 +43,26 @@ async def run_cycle(config: Config, db_path: str) -> Dict[str, int]:
     stats_counter = Counter()
     per_ticker = Counter()
     per_source = Counter()
+
+    if os.getenv("NEWS_SKIP_FETCH", "").lower() in {"1", "true", "yes"}:
+        conn = connect(db_path)
+        initialize(conn)
+        finished_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        duration = time.monotonic() - start_time
+        run_stats = RunStats(
+            started_at=started_at,
+            finished_at=finished_at,
+            fetched=0,
+            inserted=0,
+            duplicates=0,
+            errors=0,
+            duration_seconds=duration,
+        )
+        record_run(conn, run_stats)
+        conn.close()
+        logger.info("Cycle summary (skip fetch): fetched=0 inserted=0 duplicates=0 errors=0 duration=%.2fs", duration)
+        stats_counter.update(fetched=0, inserted=0, duplicates=0, errors=0)
+        return dict(stats_counter)
 
     client = HttpClient(
         concurrency=config.concurrency,

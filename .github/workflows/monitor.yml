@@ -14,8 +14,12 @@ jobs:
         with:
           python-version: "3.11"
       - name: Install dependencies
-        run: pip install -r requirements.txt
+        run: |
+          pip install -r requirements.txt
+          pip install -e .
       - name: Run monitor
+        env:
+          NEWS_SKIP_FETCH: "true"
         run: python -m monitor.cli run --config config.example.json --db news.db
       - name: Upload database artifact
         uses: actions/upload-artifact@v4
