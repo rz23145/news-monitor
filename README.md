@@ -12,7 +12,7 @@ Production-ready case study that monitors financial news for 10 equity tickers e
 - Docker, docker-compose, GitHub Actions schedule, cron, and systemd examples
 - Unit tests for parsing and dedup logic (no network calls)
 
-## Quickstart (local)
+## Quickstart (local, step-by-step)
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
@@ -21,10 +21,17 @@ python3 -m pip install -e .
 cp config.example.json config.json
 python3 -m monitor.cli run --config config.json --db news.db
 ```
+What you just created:
+- `news.db` is the SQLite database in this folder.
+- `config.json` is your local config (safe to edit).
 
-## Run forever locally
+## Run forever locally (updates every 15 minutes)
 ```bash
 python3 -m monitor.cli run --config config.json --db news.db --loop
+```
+Want a different interval? Example 5 minutes:
+```bash
+python3 -m monitor.cli run --config config.json --db news.db --loop --interval 300
 ```
 
 ## Export sample
@@ -32,6 +39,8 @@ python3 -m monitor.cli run --config config.json --db news.db --loop
 python3 -m monitor.cli export --db news.db --format json --since 24h > out.json
 ```
 CSV exports are sorted by `published_at` descending by default. Use `--ticker` to filter.
+Output files are created in this folder (repo root) unless you redirect elsewhere:
+- `out.json` or `out.csv`
 
 ## How to add tickers
 Edit `config.json` and update the `tickers` list. Optionally add `company_names` entries to improve Google News queries.
@@ -49,6 +58,27 @@ Additional export examples:
 ```bash
 python3 -m monitor.cli export --db news.db --format json --since 24h --group-by ticker > out.json
 python3 -m monitor.cli export --db news.db --format csv --since 24h --ticker AAPL > aapl.csv
+```
+
+## Where files are on your computer
+Assuming you run commands from the repo folder:
+- Database: `news.db`
+- JSON export: `out.json` (or any filename you redirect to)
+- CSV export: `out.csv` (or any filename you redirect to)
+- Config: `config.json`
+
+## How to see it working live
+Run the loop in one terminal:
+```bash
+python3 -m monitor.cli run --config config.json --db news.db --loop
+```
+In another terminal, watch stats update:
+```bash
+watch -n 5 "python3 -m monitor.cli stats --db news.db"
+```
+Or preview recent rows:
+```bash
+watch -n 30 "python3 -m monitor.cli export --db news.db --format csv --since 1h | head -n 5"
 ```
 
 ## Configuration
