@@ -1,0 +1,13 @@
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+.pytest_cache/
+.DS_Store
+news.db
+*.db
+out.json
+out.csv
+*.egg-info/
+config.json
+.env

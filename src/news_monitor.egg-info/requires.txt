@@ -1,6 +1,0 @@
-aiohttp
-feedparser
-python-dateutil
-
-[test]
-pytest

@@ -123,14 +123,35 @@ def record_run(conn: sqlite3.Connection, stats: RunStats) -> None:
     conn.commit()
 
 
-def export_items(conn: sqlite3.Connection, since_iso: Optional[str]) -> List[sqlite3.Row]:
+def export_items(
+    conn: sqlite3.Connection,
+    since_iso: Optional[str],
+    ticker: Optional[str],
+    limit: Optional[int],
+    desc: bool = True,
+) -> List[sqlite3.Row]:
+    params: list = []
+    clauses = []
+
     if since_iso:
-        cursor = conn.execute(
-            "SELECT * FROM news_items WHERE published_at >= ? ORDER BY published_at DESC",
-            (since_iso,),
-        )
-    else:
-        cursor = conn.execute("SELECT * FROM news_items ORDER BY published_at DESC")
+        clauses.append("published_at >= ?")
+        params.append(since_iso)
+    if ticker:
+        clauses.append("ticker = ?")
+        params.append(ticker)
+
+    sql = "SELECT * FROM news_items"
+    if clauses:
+        sql += " WHERE " + " AND ".join(clauses)
+
+    direction = "DESC" if desc else "ASC"
+    sql += f" ORDER BY published_at {direction}, ticker ASC, source ASC"
+
+    if limit:
+        sql += " LIMIT ?"
+        params.append(limit)
+
+    cursor = conn.execute(sql, tuple(params))
     return list(cursor.fetchall())
 
 

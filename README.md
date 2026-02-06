@@ -31,6 +31,7 @@ python3 -m monitor.cli run --config config.json --db news.db --loop
 ```bash
 python3 -m monitor.cli export --db news.db --format json --since 24h > out.json
 ```
+CSV exports are sorted by `published_at` descending by default. Use `--ticker` to filter.
 
 ## How to add tickers
 Edit `config.json` and update the `tickers` list. Optionally add `company_names` entries to improve Google News queries.
@@ -43,6 +44,11 @@ Each item generates a stable `dedup_key` by hashing a normalized URL (or guid), 
 python3 -m monitor.cli run --help
 python3 -m monitor.cli export --help
 python3 -m monitor.cli stats --help
+```
+Additional export examples:
+```bash
+python3 -m monitor.cli export --db news.db --format json --since 24h --group-by ticker > out.json
+python3 -m monitor.cli export --db news.db --format csv --since 24h --ticker AAPL > aapl.csv
 ```
 
 ## Configuration

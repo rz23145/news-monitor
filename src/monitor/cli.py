@@ -78,20 +78,78 @@ def cmd_export(args: argparse.Namespace) -> int:
     db_path = args.db or env_db_path("news.db")
     conn = connect(db_path)
     since_iso = parse_since(args.since)
-    rows = export_items(conn, since_iso)
+    if args.sort != "published_at":
+        raise argparse.ArgumentTypeError("Only --sort published_at is supported.")
+    if args.group_by and args.format != "json":
+        raise argparse.ArgumentTypeError("--group-by is only supported for JSON output.")
+
+    rows = export_items(conn, since_iso, args.ticker, args.limit, desc=args.desc)
     conn.close()
 
     if args.format == "json":
-        payload = [dict(row) for row in rows]
+        generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+        items = [dict(row) for row in rows]
+        if args.group_by == "ticker":
+            grouped = {}
+            for item in items:
+                key = item["ticker"]
+                grouped.setdefault(key, []).append(item)
+            payload = {
+                "generated_at": generated_at,
+                "since": args.since,
+                "count": len(items),
+                "tickers": {
+                    key: {"count": len(value), "items": value} for key, value in grouped.items()
+                },
+            }
+        else:
+            payload = {
+                "generated_at": generated_at,
+                "since": args.since,
+                "count": len(items),
+                "items": items,
+            }
         json.dump(payload, sys.stdout, indent=2)
         sys.stdout.write("\n")
     else:
         import csv
 
-        writer = csv.DictWriter(sys.stdout, fieldnames=rows[0].keys() if rows else [])
+        fieldnames = [
+            "ticker",
+            "published_at",
+            "source",
+            "publisher",
+            "title",
+            "url",
+            "summary",
+            "dedup_key",
+            "fetched_at",
+        ]
+        if not args.include_summary:
+            fieldnames.remove("summary")
+        writer = csv.DictWriter(
+            sys.stdout,
+            fieldnames=fieldnames,
+            quoting=csv.QUOTE_MINIMAL,
+            lineterminator="\n",
+        )
         writer.writeheader()
         for row in rows:
-            writer.writerow(dict(row))
+            record = dict(row)
+            output = {
+                "ticker": record.get("ticker"),
+                "published_at": record.get("published_at"),
+                "source": record.get("source"),
+                "publisher": record.get("source"),
+                "title": record.get("title"),
+                "url": record.get("url"),
+                "summary": record.get("summary"),
+                "dedup_key": record.get("dedup_key"),
+                "fetched_at": record.get("first_seen_at"),
+            }
+            if not args.include_summary:
+                output.pop("summary", None)
+            writer.writerow(output)
     return 0
 
 
@@ -144,6 +202,19 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--db", help="SQLite DB path")
     export_parser.add_argument("--format", choices=["json", "csv"], required=True)
     export_parser.add_argument("--since", help="Filter items since duration (24h/7d) or ISO-8601")
+    export_parser.add_argument("--ticker", help="Filter by ticker (e.g., AAPL)")
+    export_parser.add_argument("--group-by", choices=["ticker"], help="Group JSON output by ticker")
+    export_parser.add_argument("--sort", default="published_at", help="Sort field (default: published_at)")
+    export_sort = export_parser.add_mutually_exclusive_group()
+    export_sort.add_argument("--desc", action="store_true", help="Sort descending (default)")
+    export_sort.add_argument("--asc", dest="desc", action="store_false", help="Sort ascending")
+    export_parser.set_defaults(desc=True)
+    export_parser.add_argument("--limit", type=int, help="Limit number of items")
+    export_parser.add_argument(
+        "--include-summary",
+        action="store_true",
+        help="Include summary column in CSV output",
+    )
     export_parser.set_defaults(func=cmd_export)
 
     stats_parser = subparsers.add_parser("stats", help="Show latest run stats and totals")
