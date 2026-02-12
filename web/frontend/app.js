@@ -1,11 +1,16 @@
-const API_BASE = "";
+// Same origin (e.g. frontend served by FastAPI): use "". For separate dev server (Vite on 5173/3000) set to "http://localhost:8000"
+const API_BASE =
+  typeof window !== "undefined" &&
+  (window.location.port === "5173" || window.location.port === "3000")
+    ? "http://localhost:8000"
+    : "";
 
 let allItems = [];
+let totalCount = 0;
 let sortKey = "published_at";
 let sortOrder = "desc";
 let page = 1;
 let perPage = 25;
-let searchQuery = "";
 
 function debounce(fn, ms) {
   let t;
@@ -17,7 +22,10 @@ function debounce(fn, ms) {
 
 async function api(path) {
   const r = await fetch(API_BASE + path);
-  if (!r.ok) throw new Error(r.statusText);
+  if (!r.ok) {
+    const text = await r.text();
+    throw new Error(text || r.statusText);
+  }
   return r.json();
 }
 
@@ -70,6 +78,7 @@ function hideError() {
 
 function setLoading(loading) {
   document.getElementById("loading").hidden = !loading;
+  document.getElementById("skeleton").hidden = !loading;
   document.getElementById("table-wrap").hidden = loading;
   const cardList = document.getElementById("card-list");
   if (cardList) cardList.style.visibility = loading ? "hidden" : "";
@@ -81,33 +90,50 @@ function renderStats(stats) {
   document.getElementById("stat-24h").textContent =
     stats.items_last_24h != null ? String(stats.items_last_24h) : "—";
   let lastRun = "—";
-  if (stats.last_run && stats.last_run.finished_at) {
-    lastRun = formatDate(stats.last_run.finished_at);
-  } else if (stats.generated_at) {
-    lastRun = "Static: " + formatDate(stats.generated_at);
+  if (stats.last_run != null && stats.last_run !== "") {
+    lastRun = formatDate(stats.last_run);
   }
   document.getElementById("stat-last-run").textContent = lastRun;
 }
 
 function getFilters() {
-  const ticker = document.getElementById("filter-ticker").value;
-  const source = document.getElementById("filter-source").value;
+  const tickerSel = document.getElementById("filter-ticker");
+  const sourceSel = document.getElementById("filter-source");
+  const tickers = Array.from(tickerSel.selectedOptions)
+    .map((o) => o.value)
+    .filter(Boolean);
+  const sources = Array.from(sourceSel.selectedOptions)
+    .map((o) => o.value)
+    .filter(Boolean);
   const since = document.getElementById("filter-since").value;
-  return {
-    ticker: ticker || undefined,
-    source: source || undefined,
-    since: since || undefined,
-  };
+  const q = document.getElementById("filter-search").value.trim() || null;
+  return { tickers, sources, since: since || null, q };
 }
 
 function applyFiltersAndFetch() {
   const filters = getFilters();
   setLoading(true);
   hideError();
-  loadItems(filters)
+  const offset = (page - 1) * perPage;
+  const sort =
+    sortKey === "published_at"
+      ? sortOrder === "desc"
+        ? "published_at_desc"
+        : "published_at_asc"
+      : "published_at_desc";
+
+  loadItems({
+    tickers: filters.tickers.length ? filters.tickers : undefined,
+    sources: filters.sources.length ? filters.sources : undefined,
+    since: filters.since,
+    q: filters.q,
+    limit: perPage,
+    offset,
+    sort,
+  })
     .then((data) => {
       allItems = data.items || [];
-      applySearchAndSort();
+      totalCount = data.count != null ? data.count : 0;
       setLoading(false);
       renderTablePage();
       renderCardList();
@@ -115,86 +141,52 @@ function applyFiltersAndFetch() {
     })
     .catch((e) => {
       setLoading(false);
-      showError("Failed to load data. " + (e.message || "Is the backend running?"));
+      showError(e.message || "Failed to load data. Is the backend running?");
       document.getElementById("table-body").innerHTML = "";
       document.getElementById("empty-state").hidden = false;
       document.getElementById("pagination").innerHTML = "";
     });
 }
 
-function getFilteredAndSortedItems() {
-  let items = allItems.slice();
-  if (searchQuery) {
-    const q = searchQuery.toLowerCase();
-    items = items.filter(
-      (i) =>
-        (i.title || "").toLowerCase().includes(q) ||
-        (i.summary || "").toLowerCase().includes(q)
-    );
-  }
-  const key = sortKey === "origin_source" ? "origin_source" : sortKey;
-  items.sort((a, b) => {
-    let va = a[key] || "";
-    let vb = b[key] || "";
-    if (key === "published_at") {
-      va = va || "0";
-      vb = vb || "0";
-    }
-    const cmp = va < vb ? -1 : va > vb ? 1 : 0;
-    return sortOrder === "desc" ? -cmp : cmp;
-  });
-  return items;
-}
-
-function getPaginatedItems() {
-  const full = getFilteredAndSortedItems();
-  const start = (page - 1) * perPage;
-  return { pageItems: full.slice(start, start + perPage), fullCount: full.length };
-}
-
 function renderTablePage() {
   const tbody = document.getElementById("table-body");
   const emptyEl = document.getElementById("empty-state");
-  const { pageItems: items, fullCount } = getPaginatedItems();
-  const full = getFilteredAndSortedItems();
 
   document.querySelectorAll(".sortable").forEach((th) => {
     th.classList.remove("sort-asc", "sort-desc");
     if (th.dataset.sort === sortKey) th.classList.add("sort-" + sortOrder);
   });
 
-  if (!items.length) {
+  if (!allItems.length) {
     tbody.innerHTML = "";
     emptyEl.hidden = false;
     return;
   }
   emptyEl.hidden = true;
 
-  tbody.innerHTML = items
-    .map((item) => {
-      const title = item.title || item.headline || "";
+  tbody.innerHTML = allItems
+    .map((item, idx) => {
+      const headline = item.headline || item.title || "";
       const url = item.url || "#";
       const summary = item.summary || "";
       const ticker = item.ticker || "";
-      const source = item.origin_source || item.source || "";
-      const idx = full.indexOf(item);
+      const source = item.source || item.origin_source || "";
       return `
         <tr data-index="${idx}">
           <td><span class="badge">${escapeHtml(ticker)}</span></td>
           <td><time title="${escapeHtml(formatDate(item.published_at))}">${relativeTime(item.published_at)}</time></td>
           <td><span class="badge">${escapeHtml(source)}</span></td>
-          <td class="col-headline"><a href="${escapeHtml(url)}" class="headline-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(title) || "—"}</a></td>
-          <td class="summary-cell">${escapeHtml(summary) || "—"}</td>
+          <td class="col-headline"><a href="${escapeHtml(url)}" class="headline-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(headline) || "—"}</a></td>
+          <td class="summary-cell" title="${escapeHtml(summary)}">${escapeHtml(summary) || "—"}</td>
         </tr>
       `;
     })
     .join("");
 
-  const fullList = getFilteredAndSortedItems();
   tbody.querySelectorAll("tr").forEach((tr) => {
     tr.addEventListener("click", () => {
       const idx = parseInt(tr.dataset.index, 10);
-      const item = fullList[idx];
+      const item = allItems[idx];
       if (item) openDetailModal(item);
     });
   });
@@ -203,22 +195,21 @@ function renderTablePage() {
 function renderCardList() {
   const container = document.getElementById("card-list");
   if (!container) return;
-  const { pageItems: items } = getPaginatedItems();
-  if (items.length === 0) {
+  if (allItems.length === 0) {
     container.innerHTML = "";
     return;
   }
-  container.innerHTML = items
+  container.innerHTML = allItems
     .map((item) => {
-      const title = item.title || item.headline || "";
+      const headline = item.headline || item.title || "";
       const url = item.url || "#";
       const summary = item.summary || "";
       return `
-        <article class="card-item" data-url="${escapeHtml(url)}" data-title="${escapeHtml(title)}" data-summary="${escapeHtml(summary)}" data-ticker="${escapeHtml(item.ticker || "")}" data-source="${escapeHtml(item.origin_source || item.source || "")}" data-published="${escapeHtml(item.published_at || "")}">
+        <article class="card-item" data-index="${allItems.indexOf(item)}">
           <span class="badge">${escapeHtml(item.ticker || "")}</span>
-          <span class="badge">${escapeHtml(item.origin_source || item.source || "")}</span>
+          <span class="badge">${escapeHtml(item.source || item.origin_source || "")}</span>
           <time title="${escapeHtml(formatDate(item.published_at))}">${relativeTime(item.published_at)}</time>
-          <a href="${escapeHtml(url)}" class="headline-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(title) || "—"}</a>
+          <a href="${escapeHtml(url)}" class="headline-link" target="_blank" rel="noopener" onclick="event.stopPropagation()">${escapeHtml(headline) || "—"}</a>
           <p class="summary-cell">${escapeHtml(summary) || "—"}</p>
         </article>
       `;
@@ -227,26 +218,20 @@ function renderCardList() {
 
   container.querySelectorAll(".card-item").forEach((el) => {
     el.addEventListener("click", () => {
-      openDetailModal({
-        title: el.dataset.title,
-        url: el.dataset.url,
-        summary: el.dataset.summary,
-        ticker: el.dataset.ticker,
-        origin_source: el.dataset.source,
-        published_at: el.dataset.published,
-      });
+      const idx = parseInt(el.dataset.index, 10);
+      const item = allItems[idx];
+      if (item) openDetailModal(item);
     });
   });
 }
 
 function updatePagination() {
-  const total = getFilteredAndSortedItems().length;
-  const totalPages = Math.max(1, Math.ceil(total / perPage));
-  const start = (page - 1) * perPage + 1;
-  const end = Math.min(page * perPage, total);
+  const totalPages = Math.max(1, Math.ceil(totalCount / perPage));
+  const start = totalCount === 0 ? 0 : (page - 1) * perPage + 1;
+  const end = Math.min(page * perPage, totalCount);
 
   document.getElementById("pagination-info").textContent =
-    total === 0 ? "0 items" : `Showing ${start}–${end} of ${total}`;
+    totalCount === 0 ? "0 items" : `Showing ${start}–${end} of ${totalCount}`;
 
   const nav = document.getElementById("pagination");
   if (totalPages <= 1) {
@@ -254,13 +239,15 @@ function updatePagination() {
     return;
   }
   const pages = new Set([1, totalPages]);
-  for (let i = Math.max(1, page - 2); i <= Math.min(totalPages, page + 2); i++) pages.add(i);
+  for (let i = Math.max(1, page - 2); i <= Math.min(totalPages, page + 2); i++)
+    pages.add(i);
   const sorted = [...pages].sort((a, b) => a - b);
   let html = "";
   html += `<button type="button" data-page="1" ${page === 1 ? "disabled" : ""}>First</button>`;
   html += `<button type="button" data-page="${page - 1}" ${page === 1 ? "disabled" : ""}>Prev</button>`;
   sorted.forEach((i, idx) => {
-    if (idx > 0 && sorted[idx - 1] < i - 1) html += `<span class="pagination-ellipsis">…</span>`;
+    if (idx > 0 && sorted[idx - 1] < i - 1)
+      html += `<span class="pagination-ellipsis">…</span>`;
     html += `<button type="button" data-page="${i}" class="${i === page ? "active" : ""}">${i}</button>`;
   });
   html += `<button type="button" data-page="${page + 1}" ${page === totalPages ? "disabled" : ""}>Next</button>`;
@@ -270,19 +257,20 @@ function updatePagination() {
   nav.querySelectorAll("button[data-page]").forEach((btn) => {
     btn.addEventListener("click", () => {
       page = parseInt(btn.dataset.page, 10);
-      renderTablePage();
-      renderCardList();
-      updatePagination();
+      applyFiltersAndFetch();
     });
   });
 }
 
 function openDetailModal(item) {
   const modal = document.getElementById("detail-modal");
-  document.getElementById("detail-ticker").textContent = item.ticker ? "Ticker: " + item.ticker : "";
+  document.getElementById("detail-ticker").textContent = item.ticker
+    ? "Ticker: " + item.ticker
+    : "";
   document.getElementById("detail-meta").textContent =
-    (item.origin_source || item.source || "") + " · " + formatDate(item.published_at);
-  document.getElementById("detail-headline").textContent = item.title || item.headline || "—";
+    (item.source || item.origin_source || "") + " · " + formatDate(item.published_at);
+  document.getElementById("detail-headline").textContent =
+    item.headline || item.title || "—";
   document.getElementById("detail-summary").textContent = item.summary || "—";
   const link = document.getElementById("detail-url");
   link.href = item.url || "#";
@@ -296,67 +284,71 @@ function closeDetailModal() {
 
 function initSortableHeaders() {
   document.querySelectorAll(".data-table th.sortable").forEach((th) => {
-    const key = th.dataset.sort;
     th.addEventListener("click", () => {
+      const key = th.dataset.sort;
       if (sortKey === key) sortOrder = sortOrder === "desc" ? "asc" : "desc";
       else {
         sortKey = key;
         sortOrder = key === "published_at" ? "desc" : "asc";
       }
       page = 1;
-      renderTablePage();
-      renderCardList();
-      updatePagination();
+      applyFiltersAndFetch();
     });
   });
 }
 
-async function loadItems(params = {}) {
+async function loadItems(params) {
   const q = new URLSearchParams();
-  if (params.ticker) q.append("ticker", params.ticker);
-  if (params.source) q.append("source", params.source);
+  if (params.tickers && params.tickers.length)
+    params.tickers.forEach((t) => q.append("ticker", t));
+  if (params.sources && params.sources.length)
+    params.sources.forEach((s) => q.append("source", s));
   if (params.since) q.set("since", params.since);
-  q.set("limit", "3000");
-  const path = "/api/items" + (q.toString() ? "?" + q.toString() : "");
-  return api(path);
+  if (params.q) q.set("q", params.q);
+  q.set("limit", String(params.limit != null ? params.limit : perPage));
+  q.set("offset", String(params.offset != null ? params.offset : 0));
+  if (params.sort) q.set("sort", params.sort);
+  const path = "/api/items?" + q.toString();
+  const data = await api(path);
+  return { items: data.items || [], count: data.count != null ? data.count : 0 };
+}
+
+function clearFilters() {
+  document.getElementById("filter-ticker").selectedIndex = -1;
+  const tickerOpts = document.getElementById("filter-ticker").options;
+  for (let i = 0; i < tickerOpts.length; i++) tickerOpts[i].selected = false;
+  document.getElementById("filter-source").selectedIndex = -1;
+  const sourceOpts = document.getElementById("filter-source").options;
+  for (let i = 0; i < sourceOpts.length; i++) sourceOpts[i].selected = false;
+  document.getElementById("filter-since").value = "24h";
+  document.getElementById("filter-search").value = "";
+  page = 1;
+  applyFiltersAndFetch();
 }
 
 async function init() {
   document.getElementById("error-dismiss").addEventListener("click", hideError);
-  document.querySelector(".modal-backdrop").addEventListener("click", closeDetailModal);
+  document
+    .querySelector(".modal-backdrop")
+    .addEventListener("click", closeDetailModal);
   document.querySelector(".modal-close").addEventListener("click", closeDetailModal);
   document.addEventListener("keydown", (e) => {
     if (e.key === "Escape") closeDetailModal();
   });
 
-  document.getElementById("filter-ticker").addEventListener("change", () => {
+  document.getElementById("btn-apply").addEventListener("click", () => {
     page = 1;
     applyFiltersAndFetch();
   });
-  document.getElementById("filter-source").addEventListener("change", () => {
-    page = 1;
+  document.getElementById("btn-clear").addEventListener("click", clearFilters);
+  document.getElementById("btn-refresh").addEventListener("click", () => {
     applyFiltersAndFetch();
   });
-  document.getElementById("filter-since").addEventListener("change", () => {
-    page = 1;
-    applyFiltersAndFetch();
-  });
-  document.getElementById("filter-search").addEventListener(
-    "input",
-    debounce(() => {
-      searchQuery = document.getElementById("filter-search").value.trim();
-      page = 1;
-      renderTablePage();
-      renderCardList();
-      updatePagination();
-    }, 250)
-  );
+
   document.getElementById("per-page").addEventListener("change", (e) => {
     perPage = parseInt(e.target.value, 10);
     page = 1;
-    renderTablePage();
-    renderCardList();
-    updatePagination();
+    applyFiltersAndFetch();
   });
 
   initSortableHeaders();
@@ -386,7 +378,7 @@ async function init() {
     });
     applyFiltersAndFetch();
   } catch (e) {
-    showError("Failed to load. " + (e.message || "Is the backend running?"));
+    showError(e.message || "Failed to load. Is the backend running?");
     setLoading(false);
   }
 }

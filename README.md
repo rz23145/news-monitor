@@ -170,35 +170,57 @@ sudo systemctl enable --now news-monitor.timer
 `.github/workflows/monitor.yml` runs every 15 minutes. Since GitHub Actions runners are ephemeral, the SQLite database is uploaded as an artifact after each run. You can download artifacts to persist history, or replace the artifact step with S3 storage if needed.
 
 ## Run Dashboard
-A production-style web dashboard for reading and filtering news. No charts—focused on the items table.
+Web dashboard for reading and filtering news (table-focused, no charts).
 
-<!-- Screenshot: run the dashboard and add a file e.g. docs/dashboard-screenshot.png, then use: ![Dashboard](docs/dashboard-screenshot.png) -->
+### Start backend and frontend
 
-**Local mode** (reads from SQLite):
+**Backend** (FastAPI + Uvicorn). From repo root:
 
 ```bash
-# From repo root (after pip install -e .)
-python3 -m web.backend.main
+# Install deps if needed
+pip install -e .
+pip install fastapi "uvicorn[standard]"
+
+# Run API + serve frontend (frontend is served at /)
+python3 -m uvicorn web.backend.main:app --reload --port 8000
 ```
 
-Then open http://localhost:8000
+Then open **http://localhost:8000** in your browser. The same process serves both the API and the static frontend.
 
-**Static mode** (reads from pre-generated JSON, no DB):
+**Optional: frontend on a separate dev server** (e.g. Vite on port 5173). Set `API_BASE` in `web/frontend/app.js` to `"http://localhost:8000"` so the app calls the API correctly. CORS allows `http://localhost:5173`, `http://localhost:3000`, and `http://localhost:8000`.
+
+**Static mode** (no DB; use pre-generated JSON):
 
 ```bash
 export NEWS_UI_MODE=static
 export NEWS_UI_JSON_PATH=out_grouped_by_ticker.json
-python3 -m web.backend.main
+python3 -m uvicorn web.backend.main:app --reload --port 8000
 ```
 
+### API examples (curl)
+
+**GET /api/items** — Returns `{ "items": [ ... ], "count": <int> }`. Query params: `ticker`, `source` (repeatable), `since` (e.g. 24h, 7d), `q` (search headline/summary), `limit` (default 200), `offset`, `sort` (published_at_desc | published_at_asc).
+
+```bash
+curl -s "http://localhost:8000/api/items?since=24h&limit=5"
+curl -s "http://localhost:8000/api/items?ticker=AAPL&ticker=MSFT&since=7d&sort=published_at_desc"
+```
+
+**GET /api/stats** — Returns `{ "total_items", "items_last_24h", "last_run" (ISO or null), "by_ticker", "by_source" }`.
+
+```bash
+curl -s "http://localhost:8000/api/stats"
+```
+
+OpenAPI docs: **http://localhost:8000/docs** (confirm `/api/items` response schema shows `ItemsResponse` with `items` and `count`).
+
 ### UI features
-- **Stats row** — Total items, items in last 24h, last run time.
-- **Filters** — Single-select Ticker and Source (with “All”), time range (1h, 6h, 24h, 7d, 30d), and a search box. Filters apply automatically (search is debounced 250ms); no Apply button.
-- **Table** — Columns: Ticker (badge), Published (relative time; exact time in tooltip), Source (badge), Headline (link), Summary (truncated). Sortable column headers (click to toggle asc/desc; default: Published descending). Sticky header when scrolling. Row hover highlight. Click a row to open a **details modal** with full headline, summary, URL, and metadata.
-- **Pagination** — 25 / 50 / 100 rows per page with First, Prev, Next, Last and page numbers.
-- **Empty state** — Message with a hint to widen time range or clear filters when no items match.
-- **Loading & errors** — Spinner while fetching; dismissible error banner if the API fails.
-- **Responsive** — On narrow screens (≤700px) the table is replaced by a card list; filters stack into two then one column.
+- **Stats row** — Total items, items last 24h, last run (ISO).
+- **Filters** — Ticker multi-select, Source multi-select, time range (1h, 6h, 24h, 7d, 30d), search box. **Apply** to run filters, **Clear** to reset, **Refresh** to refetch.
+- **Table** — Sortable (Published, Ticker, Source); headline links to URL; summary truncated with tooltip. Row click opens a **details modal**. Sticky header, row hover.
+- **Pagination** — 25 / 50 / 100 per page; First / Prev / Next / Last.
+- **Loading** — Spinner and skeleton rows; error banner shows the actual error message.
+- **Responsive** — Narrow screens: card list instead of table; filters stack.
 
 ## Testing
 ```bash

@@ -141,9 +141,38 @@ body {
 
 .filters-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 1rem 1.25rem;
   align-items: end;
+}
+.field-buttons .button-group {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+}
+.btn {
+  padding: 0 1rem;
+  height: var(--input-height);
+  border-radius: var(--radius-sm);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text);
+}
+.btn:hover {
+  background: var(--surface-hover);
+  border-color: var(--text-muted);
+}
+.btn-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--bg);
+}
+.btn-primary:hover {
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
 
 .field {
@@ -250,6 +279,30 @@ body {
 
 .loading[hidden] {
   display: none;
+}
+
+.skeleton {
+  padding: 1rem 1.25rem;
+}
+.skeleton[hidden] {
+  display: none;
+}
+.skeleton-row {
+  height: 48px;
+  background: linear-gradient(
+    90deg,
+    var(--surface-hover) 25%,
+    var(--border-subtle) 50%,
+    var(--surface-hover) 75%
+  );
+  background-size: 200% 100%;
+  animation: skeleton 1.2s ease-in-out infinite;
+  border-radius: var(--radius-sm);
+  margin-bottom: 0.5rem;
+}
+@keyframes skeleton {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
 }
 
 .spinner {
