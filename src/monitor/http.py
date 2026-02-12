@@ -3,12 +3,14 @@ from __future__ import annotations
 import asyncio
 import logging
 import random
+import ssl
 import time
 from dataclasses import dataclass
 from typing import Dict, Optional
 from urllib.parse import urlparse
 
 import aiohttp
+import certifi
 
 logger = logging.getLogger(__name__)
 
@@ -88,4 +90,8 @@ class HttpClient:
 
 
 def create_session(client: HttpClient) -> aiohttp.ClientSession:
-    return aiohttp.ClientSession(headers=client.headers())
+    # Use certifi's CA bundle so HTTPS works on macOS (python.org installs often
+    # don't use the system cert store, causing CERTIFICATE_VERIFY_FAILED).
+    ssl_context = ssl.create_default_context(cafile=certifi.where())
+    connector = aiohttp.TCPConnector(ssl=ssl_context)
+    return aiohttp.ClientSession(headers=client.headers(), connector=connector)

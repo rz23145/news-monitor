@@ -10,8 +10,11 @@ readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
   "aiohttp",
+  "certifi",
   "feedparser",
   "python-dateutil",
+  "fastapi",
+  "uvicorn[standard]",
 ]
 
 [project.optional-dependencies]

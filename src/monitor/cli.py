@@ -3,6 +3,7 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import os
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -22,6 +23,89 @@ def setup_logging(log_file: Optional[str]) -> None:
         format="%(asctime)s | %(levelname)s | %(name)s | %(message)s",
         handlers=handlers,
     )
+
+
+def auto_export_after_run(db_path: str) -> None:
+    """Generate out.csv, out.json, out_grouped_by_ticker.json (last 24h) in cwd."""
+    since_iso = parse_since("24h")
+    conn = connect(db_path)
+    try:
+        rows_flat = export_items(
+            conn, since_iso, None, None, desc=True, sort="ticker,published_desc"
+        )
+        items = [dict(r) for r in rows_flat]
+
+        cwd = os.getcwd()
+        generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+
+        # out.csv — improved columns, sort ticker ASC, published_at DESC
+        csv_path = os.path.join(cwd, "out.csv")
+        _write_auto_csv(csv_path, rows_flat)
+
+        # out.json — flat list
+        json_path = os.path.join(cwd, "out.json")
+        payload = {
+            "generated_at": generated_at,
+            "since": "24h",
+            "count": len(items),
+            "items": items,
+        }
+        with open(json_path, "w", encoding="utf-8") as f:
+            json.dump(payload, f, indent=2)
+            f.write("\n")
+
+        # out_grouped_by_ticker.json
+        grouped_path = os.path.join(cwd, "out_grouped_by_ticker.json")
+        items_by_ticker = {}
+        for item in items:
+            items_by_ticker.setdefault(item["ticker"], []).append(item)
+        grouped_payload = {
+            "generated_at": generated_at,
+            "since": "24h",
+            "count": len(items),
+            "items_by_ticker": items_by_ticker,
+        }
+        with open(grouped_path, "w", encoding="utf-8") as f:
+            json.dump(grouped_payload, f, indent=2)
+            f.write("\n")
+
+        logging.info("Auto-exported to %s: out.csv, out.json, out_grouped_by_ticker.json", cwd)
+    finally:
+        conn.close()
+
+
+def _write_auto_csv(path: str, rows: list) -> None:
+    """Write CSV with columns: ticker, published_at, source, headline, url, summary, first_seen_at."""
+    import csv
+
+    fieldnames = [
+        "ticker",
+        "published_at",
+        "source",
+        "headline",
+        "url",
+        "summary",
+        "first_seen_at",
+    ]
+    with open(path, "w", encoding="utf-8", newline="") as f:
+        writer = csv.DictWriter(
+            f,
+            fieldnames=fieldnames,
+            quoting=csv.QUOTE_MINIMAL,
+            lineterminator="\n",
+        )
+        writer.writeheader()
+        for row in rows:
+            r = dict(row)
+            writer.writerow({
+                "ticker": r.get("ticker"),
+                "published_at": r.get("published_at"),
+                "source": r.get("source"),
+                "headline": r.get("title"),
+                "url": r.get("url"),
+                "summary": r.get("summary") or "",
+                "first_seen_at": r.get("first_seen_at"),
+            })
 
 
 def parse_since(value: Optional[str]) -> Optional[str]:
@@ -54,6 +138,8 @@ def cmd_run(args: argparse.Namespace) -> int:
         logging.info("Starting fetch cycle")
         stats = run_cycle_sync(config, db_path)
         logging.info("Cycle complete: %s", stats)
+            if not args.no_auto_export:
+            auto_export_after_run(db_path)
         if not args.loop:
             break
         time.sleep(args.interval or config.interval_seconds)
@@ -78,78 +164,112 @@ def cmd_export(args: argparse.Namespace) -> int:
     db_path = args.db or env_db_path("news.db")
     conn = connect(db_path)
     since_iso = parse_since(args.since)
-    if args.sort != "published_at":
-        raise argparse.ArgumentTypeError("Only --sort published_at is supported.")
+    sort = getattr(args, "sort", "published_at") or "published_at"
+    if sort not in ("published_at", "ticker,published_desc"):
+        raise argparse.ArgumentTypeError(
+            "Only --sort published_at or --sort ticker,published_desc is supported."
+        )
     if args.group_by and args.format != "json":
         raise argparse.ArgumentTypeError("--group-by is only supported for JSON output.")
 
-    rows = export_items(conn, since_iso, args.ticker, args.limit, desc=args.desc)
+    rows = export_items(
+        conn, since_iso, args.ticker, args.limit, desc=args.desc, sort=sort
+    )
     conn.close()
 
-    if args.format == "json":
-        generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
-        items = [dict(row) for row in rows]
-        if args.group_by == "ticker":
-            grouped = {}
-            for item in items:
-                key = item["ticker"]
-                grouped.setdefault(key, []).append(item)
-            payload = {
-                "generated_at": generated_at,
-                "since": args.since,
-                "count": len(items),
-                "tickers": {
-                    key: {"count": len(value), "items": value} for key, value in grouped.items()
-                },
-            }
+    out = open(args.output, "w", encoding="utf-8") if args.output else sys.stdout
+    try:
+        if args.format == "json":
+            generated_at = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+            items = [dict(row) for row in rows]
+            if args.group_by == "ticker":
+                items_by_ticker = {}
+                for item in items:
+                    items_by_ticker.setdefault(item["ticker"], []).append(item)
+                payload = {
+                    "generated_at": generated_at,
+                    "since": args.since,
+                    "count": len(items),
+                    "items_by_ticker": items_by_ticker,
+                }
+            else:
+                payload = {
+                    "generated_at": generated_at,
+                    "since": args.since,
+                    "count": len(items),
+                    "items": items,
+                }
+            json.dump(payload, out, indent=2)
+            out.write("\n")
         else:
-            payload = {
-                "generated_at": generated_at,
-                "since": args.since,
-                "count": len(items),
-                "items": items,
-            }
-        json.dump(payload, sys.stdout, indent=2)
-        sys.stdout.write("\n")
-    else:
-        import csv
+            import csv
 
-        fieldnames = [
-            "ticker",
-            "published_at",
-            "source",
-            "publisher",
-            "title",
-            "url",
-            "summary",
-            "dedup_key",
-            "fetched_at",
-        ]
-        if not args.include_summary:
-            fieldnames.remove("summary")
-        writer = csv.DictWriter(
-            sys.stdout,
-            fieldnames=fieldnames,
-            quoting=csv.QUOTE_MINIMAL,
-            lineterminator="\n",
-        )
-        writer.writeheader()
-        for row in rows:
-            record = dict(row)
-            output = {
-                "ticker": record.get("ticker"),
-                "published_at": record.get("published_at"),
-                "source": record.get("source"),
-                "publisher": record.get("source"),
-                "title": record.get("title"),
-                "url": record.get("url"),
-                "summary": record.get("summary"),
-                "dedup_key": record.get("dedup_key"),
-                "fetched_at": record.get("first_seen_at"),
-            }
-            if not args.include_summary:
-                output.pop("summary", None)
-            writer.writerow(output)
+            use_improved_csv = sort == "ticker,published_desc"
+            if use_improved_csv:
+                fieldnames = [
+                    "ticker",
+                    "published_at",
+                    "source",
+                    "headline",
+                    "url",
+                    "summary",
+                    "first_seen_at",
+                ]
+                if not args.include_summary:
+                    fieldnames.remove("summary")
+            else:
+                fieldnames = [
+                    "ticker",
+                    "published_at",
+                    "source",
+                    "publisher",
+                    "title",
+                    "url",
+                    "summary",
+                    "dedup_key",
+                    "fetched_at",
+                ]
+                if not args.include_summary:
+                    fieldnames.remove("summary")
+            writer = csv.DictWriter(
+                out,
+                fieldnames=fieldnames,
+                quoting=csv.QUOTE_MINIMAL,
+                lineterminator="\n",
+            )
+            writer.writeheader()
+            for row in rows:
+                record = dict(row)
+                if use_improved_csv:
+                    output = {
+                        "ticker": record.get("ticker"),
+                        "published_at": record.get("published_at"),
+                        "source": record.get("source"),
+                        "headline": record.get("title"),
+                        "url": record.get("url"),
+                        "summary": record.get("summary", "") if args.include_summary else "",
+                        "first_seen_at": record.get("first_seen_at"),
+                    }
+                    if not args.include_summary:
+                        output.pop("summary", None)
+                else:
+                    output = {
+                        "ticker": record.get("ticker"),
+                        "published_at": record.get("published_at"),
+                        "source": record.get("source"),
+                        "publisher": record.get("source"),
+                        "title": record.get("title"),
+                        "url": record.get("url"),
+                        "summary": record.get("summary"),
+                        "dedup_key": record.get("dedup_key"),
+                        "fetched_at": record.get("first_seen_at"),
+                    }
+                    if not args.include_summary:
+                        output.pop("summary", None)
+                writer.writerow(output)
+    finally:
+        if args.output:
+            out.close()
     return 0
 
 
@@ -196,6 +316,11 @@ def build_parser() -> argparse.ArgumentParser:
     run_parser.add_argument("--db", help="SQLite DB path")
     run_parser.add_argument("--loop", action="store_true", help="Run forever with sleep interval")
     run_parser.add_argument("--interval", type=int, help="Override sleep interval (seconds)")
+    run_parser.add_argument(
+        "--no-auto-export",
+        action="store_true",
+        help="Skip auto-generating out.csv, out.json, out_grouped_by_ticker.json after run",
+    )
     run_parser.set_defaults(func=cmd_run)
 
     export_parser = subparsers.add_parser("export", help="Export items as JSON or CSV")
@@ -204,7 +329,11 @@ def build_parser() -> argparse.ArgumentParser:
     export_parser.add_argument("--since", help="Filter items since duration (24h/7d) or ISO-8601")
     export_parser.add_argument("--ticker", help="Filter by ticker (e.g., AAPL)")
     export_parser.add_argument("--group-by", choices=["ticker"], help="Group JSON output by ticker")
-    export_parser.add_argument("--sort", default="published_at", help="Sort field (default: published_at)")
+    export_parser.add_argument(
+        "--sort",
+        default="published_at",
+        help="Sort: published_at (default) or ticker,published_desc",
+    )
     export_sort = export_parser.add_mutually_exclusive_group()
     export_sort.add_argument("--desc", action="store_true", help="Sort descending (default)")
     export_sort.add_argument("--asc", dest="desc", action="store_false", help="Sort ascending")
@@ -215,6 +344,7 @@ def build_parser() -> argparse.ArgumentParser:
         action="store_true",
         help="Include summary column in CSV output",
     )
+    export_parser.add_argument("-o", "--output", help="Write output to file (default: stdout)")
     export_parser.set_defaults(func=cmd_export)
 
     stats_parser = subparsers.add_parser("stats", help="Show latest run stats and totals")

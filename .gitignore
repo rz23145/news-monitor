@@ -8,6 +8,7 @@ news.db
 *.db
 out.json
 out.csv
+out_grouped_by_ticker.json
 *.egg-info/
 config.json
 .env

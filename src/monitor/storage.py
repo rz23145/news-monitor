@@ -129,7 +129,12 @@ def export_items(
     ticker: Optional[str],
     limit: Optional[int],
     desc: bool = True,
+    sort: str = "published_at",
 ) -> List[sqlite3.Row]:
+    """
+    sort: "published_at" (default) -> ORDER BY published_at DESC, ticker, source
+          "ticker,published_desc" -> ORDER BY ticker ASC, published_at DESC, source
+    """
     params: list = []
     clauses = []
 
@@ -144,8 +149,12 @@ def export_items(
     if clauses:
         sql += " WHERE " + " AND ".join(clauses)
 
-    direction = "DESC" if desc else "ASC"
-    sql += f" ORDER BY published_at {direction}, ticker ASC, source ASC"
+    if sort == "ticker,published_desc":
+        direction = "DESC" if desc else "ASC"
+        sql += f" ORDER BY ticker ASC, published_at {direction}, source ASC"
+    else:
+        direction = "DESC" if desc else "ASC"
+        sql += f" ORDER BY published_at {direction}, ticker ASC, source ASC"
 
     if limit:
         sql += " LIMIT ?"

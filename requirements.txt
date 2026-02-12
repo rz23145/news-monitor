@@ -1,4 +1,7 @@
 aiohttp
+certifi
 feedparser
 python-dateutil
 pytest
+fastapi
+uvicorn[standard]
