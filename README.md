@@ -181,20 +181,26 @@ Web dashboard for reading and filtering news (table-focused, no charts).
 pip install -e .
 pip install fastapi "uvicorn[standard]"
 
-# Run API + serve frontend (frontend is served at /)
-python3 -m uvicorn web.backend.main:app --reload --port 8000
+# Run API + serve frontend (app at http://localhost:8001/app/)
+python3 -m uvicorn web.backend.main:app --reload --port 8001
 ```
 
-Then open **http://localhost:8000** in your browser. The same process serves both the API and the static frontend.
+If you see **Address already in use**, free the port first (macOS):
 
-**Optional: frontend on a separate dev server** (e.g. Vite on port 5173). Set `API_BASE` in `web/frontend/app.js` to `"http://localhost:8000"` so the app calls the API correctly. CORS allows `http://localhost:5173`, `http://localhost:3000`, and `http://localhost:8000`.
+```bash
+lsof -ti :8001 | xargs kill -9
+```
+
+Then open **http://localhost:8001** in your browser (you’ll be redirected to **http://localhost:8001/app/**). The same process serves both the API and the static frontend.
+
+**Optional: frontend on a separate dev server** (e.g. Vite on port 5173). Set `API_BASE` in `web/frontend/app.js` to `"http://localhost:8001"`. CORS allows `http://localhost:5173`, `http://localhost:3000`, and `http://localhost:8001`.
 
 **Static mode** (no DB; use pre-generated JSON):
 
 ```bash
 export NEWS_UI_MODE=static
 export NEWS_UI_JSON_PATH=out_grouped_by_ticker.json
-python3 -m uvicorn web.backend.main:app --reload --port 8000
+python3 -m uvicorn web.backend.main:app --reload --port 8001
 ```
 
 ### API examples (curl)
@@ -202,17 +208,17 @@ python3 -m uvicorn web.backend.main:app --reload --port 8000
 **GET /api/items** — Returns `{ "items": [ ... ], "count": <int> }`. Query params: `ticker`, `source` (repeatable), `since` (e.g. 24h, 7d), `q` (search headline/summary), `limit` (default 200), `offset`, `sort` (published_at_desc | published_at_asc).
 
 ```bash
-curl -s "http://localhost:8000/api/items?since=24h&limit=5"
-curl -s "http://localhost:8000/api/items?ticker=AAPL&ticker=MSFT&since=7d&sort=published_at_desc"
+curl -s "http://localhost:8001/api/items?since=24h&limit=5"
+curl -s "http://localhost:8001/api/items?ticker=AAPL&ticker=MSFT&since=7d&sort=published_at_desc"
 ```
 
 **GET /api/stats** — Returns `{ "total_items", "items_last_24h", "last_run" (ISO or null), "by_ticker", "by_source" }`.
 
 ```bash
-curl -s "http://localhost:8000/api/stats"
+curl -s "http://localhost:8001/api/stats"
 ```
 
-OpenAPI docs: **http://localhost:8000/docs** (confirm `/api/items` response schema shows `ItemsResponse` with `items` and `count`).
+OpenAPI docs: **http://localhost:8001/docs** (confirm `/api/items` response schema shows `ItemsResponse` with `items` and `count`).
 
 ### UI features
 - **Stats row** — Total items, items last 24h, last run (ISO).

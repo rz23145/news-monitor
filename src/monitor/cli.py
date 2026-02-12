@@ -138,7 +138,7 @@ def cmd_run(args: argparse.Namespace) -> int:
         logging.info("Starting fetch cycle")
         stats = run_cycle_sync(config, db_path)
         logging.info("Cycle complete: %s", stats)
-            if not args.no_auto_export:
+        if not args.no_auto_export:
             auto_export_after_run(db_path)
         if not args.loop:
             break
