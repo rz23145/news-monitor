@@ -34,6 +34,19 @@ Want a different interval? Example 5 minutes:
 python3 -m monitor.cli run --config config.json --db news.db --loop --interval 300
 ```
 
+## Auto-generated exports
+After every successful `run` (single cycle or each loop iteration), the CLI automatically generates in the repo root (current working directory):
+
+- **out.csv** — last 24 hours, columns: ticker, published_at, source, headline, url, summary, first_seen_at; sorted by ticker ASC, published_at DESC
+- **out.json** — last 24 hours, flat list of items
+- **out_grouped_by_ticker.json** — last 24 hours, structure `items_by_ticker: { "AAPL": [...], "MSFT": [...] }`
+
+To skip auto-export, pass **--no-auto-export**:
+
+```bash
+python3 -m monitor.cli run --config config.json --db news.db --no-auto-export
+```
+
 ## Export sample
 ```bash
 python3 -m monitor.cli export --db news.db --format json --since 24h > out.json
@@ -41,6 +54,10 @@ python3 -m monitor.cli export --db news.db --format json --since 24h > out.json
 CSV exports are sorted by `published_at` descending by default. Use `--ticker` to filter.
 Output files are created in this folder (repo root) unless you redirect elsewhere:
 - `out.json` or `out.csv`
+
+Existing export behavior is unchanged. Optional flags:
+- `--sort ticker,published_desc` — sort by ticker ASC, published_at DESC; CSV uses columns headline, first_seen_at
+- `--group-by ticker` (JSON only) — output `items_by_ticker: { "AAPL": [...], ... }`
 
 ## How to add tickers
 Edit `config.json` and update the `tickers` list. Optionally add `company_names` entries to improve Google News queries.
@@ -152,6 +169,37 @@ sudo systemctl enable --now news-monitor.timer
 ### GitHub Actions schedule
 `.github/workflows/monitor.yml` runs every 15 minutes. Since GitHub Actions runners are ephemeral, the SQLite database is uploaded as an artifact after each run. You can download artifacts to persist history, or replace the artifact step with S3 storage if needed.
 
+## Run Dashboard
+A production-style web dashboard for reading and filtering news. No charts—focused on the items table.
+
+<!-- Screenshot: run the dashboard and add a file e.g. docs/dashboard-screenshot.png, then use: ![Dashboard](docs/dashboard-screenshot.png) -->
+
+**Local mode** (reads from SQLite):
+
+```bash
+# From repo root (after pip install -e .)
+python3 -m web.backend.main
+```
+
+Then open http://localhost:8000
+
+**Static mode** (reads from pre-generated JSON, no DB):
+
+```bash
+export NEWS_UI_MODE=static
+export NEWS_UI_JSON_PATH=out_grouped_by_ticker.json
+python3 -m web.backend.main
+```
+
+### UI features
+- **Stats row** — Total items, items in last 24h, last run time.
+- **Filters** — Single-select Ticker and Source (with “All”), time range (1h, 6h, 24h, 7d, 30d), and a search box. Filters apply automatically (search is debounced 250ms); no Apply button.
+- **Table** — Columns: Ticker (badge), Published (relative time; exact time in tooltip), Source (badge), Headline (link), Summary (truncated). Sortable column headers (click to toggle asc/desc; default: Published descending). Sticky header when scrolling. Row hover highlight. Click a row to open a **details modal** with full headline, summary, URL, and metadata.
+- **Pagination** — 25 / 50 / 100 rows per page with First, Prev, Next, Last and page numbers.
+- **Empty state** — Message with a hint to widen time range or clear filters when no items match.
+- **Loading & errors** — Spinner while fetching; dismissible error banner if the API fails.
+- **Responsive** — On narrow screens (≤700px) the table is replaced by a card list; filters stack into two then one column.
+
 ## Testing
 ```bash
 pytest
@@ -159,7 +207,7 @@ pytest
 
 ## Troubleshooting
 - RSS blocked or rate limited: reduce `NEWS_CONCURRENCY`, increase `NEWS_MIN_HOST_DELAY_SECONDS`, and verify your `NEWS_USER_AGENT`.
-- SSL certificate errors (macOS): `python3 -m pip install --upgrade certifi` then `export SSL_CERT_FILE="$(python3 -c 'import certifi; print(certifi.where())')"`
+- SSL certificate errors (macOS): the app uses the `certifi` CA bundle by default. Ensure `pip install -e .` (or `certifi`) is installed. If problems persist, set `export SSL_CERT_FILE="$(python3 -c 'import certifi; print(certifi.where())')"` before running.
 - Timeouts: increase `NEWS_TIMEOUT_SECONDS` or check network connectivity.
 - Empty results: verify tickers and check feed URLs manually.
 - SQLite locked: avoid running multiple loops against the same DB file.

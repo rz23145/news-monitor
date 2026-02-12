@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>News Monitor</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+  <header class="header">
+    <div class="header-inner">
+      <h1 class="header-title">News Monitor</h1>
+      <p class="header-subtitle">Financial news dashboard</p>
+    </div>
+  </header>
+
+  <main class="main">
+    <div id="error-banner" class="error-banner" role="alert" hidden>
+      <span id="error-text"></span>
+      <button type="button" class="error-dismiss" aria-label="Dismiss">×</button>
+    </div>
+
+    <section class="stats-row">
+      <div class="stat-card">
+        <span class="stat-label">Total items</span>
+        <span class="stat-value" id="stat-total">—</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Items last 24h</span>
+        <span class="stat-value" id="stat-24h">—</span>
+      </div>
+      <div class="stat-card">
+        <span class="stat-label">Last run</span>
+        <span class="stat-value" id="stat-last-run">—</span>
+      </div>
+    </section>
+
+    <section class="filters-card">
+      <div class="filters-grid">
+        <div class="field">
+          <label for="filter-ticker">Ticker</label>
+          <select id="filter-ticker">
+            <option value="">All</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="filter-source">Source</label>
+          <select id="filter-source">
+            <option value="">All</option>
+          </select>
+        </div>
+        <div class="field">
+          <label for="filter-since">Time range</label>
+          <select id="filter-since">
+            <option value="1h">1 hour</option>
+            <option value="6h">6 hours</option>
+            <option value="24h" selected>24 hours</option>
+            <option value="7d">7 days</option>
+            <option value="30d">30 days</option>
+          </select>
+        </div>
+        <div class="field field-search">
+          <label for="filter-search">Search</label>
+          <input type="text" id="filter-search" placeholder="Headline or summary…" autocomplete="off" />
+        </div>
+      </div>
+    </section>
+
+    <section class="table-section">
+      <div class="table-header-row">
+        <span class="table-title">Items</span>
+        <div class="pagination-controls">
+          <label for="per-page">Per page</label>
+          <select id="per-page">
+            <option value="25">25</option>
+            <option value="50">50</option>
+            <option value="100">100</option>
+          </select>
+          <span class="pagination-info" id="pagination-info">—</span>
+        </div>
+      </div>
+
+      <div id="loading" class="loading" hidden>
+        <div class="spinner"></div>
+        <span>Loading…</span>
+      </div>
+
+      <div class="table-wrap" id="table-wrap">
+        <table class="data-table" id="data-table">
+          <thead>
+            <tr>
+              <th class="col-ticker sortable" data-sort="ticker">Ticker <span class="sort-icon"></span></th>
+              <th class="col-published sortable sort-desc" data-sort="published_at">Published <span class="sort-icon"></span></th>
+              <th class="col-source sortable" data-sort="origin_source">Source <span class="sort-icon"></span></th>
+              <th class="col-headline">Headline</th>
+              <th class="col-summary">Summary</th>
+            </tr>
+          </thead>
+          <tbody id="table-body"></tbody>
+        </table>
+      </div>
+
+      <div id="card-list" class="card-list"></div>
+
+      <div class="table-footer">
+        <div class="empty-state" id="empty-state" hidden>
+          <p>No items match your filters.</p>
+          <p class="empty-hint">Try widening the time range or clearing ticker/source filters.</p>
+        </div>
+        <nav class="pagination" id="pagination" aria-label="Table pagination"></nav>
+      </div>
+    </section>
+  </main>
+
+  <div id="detail-modal" class="modal" role="dialog" aria-modal="true" aria-labelledby="modal-title" hidden>
+    <div class="modal-backdrop"></div>
+    <div class="modal-content">
+      <div class="modal-header">
+        <h2 id="modal-title" class="modal-title">Item details</h2>
+        <button type="button" class="modal-close" aria-label="Close">×</button>
+      </div>
+      <div class="modal-body">
+        <p class="detail-ticker" id="detail-ticker"></p>
+        <p class="detail-meta" id="detail-meta"></p>
+        <h3 class="detail-headline" id="detail-headline"></h3>
+        <p class="detail-summary" id="detail-summary"></p>
+        <a id="detail-url" class="detail-link" href="#" target="_blank" rel="noopener">Open article →</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
